@@ -36,7 +36,7 @@
             display: flex;
             align-items: center;
             color: #fff;
-            font-size: 1.5rem; /* 50% larger */
+            font-size: 1.5rem;
             font-weight: bold;
         }
 
@@ -61,7 +61,23 @@
             <div class="dot"></div>
             <span>Live</span>
         </div>
-        <img src="/video_feed" alt="Camera Feed" />
+        <img id="video" alt="Camera Feed">
     </div>
+
+    <script>
+        const ws = new WebSocket("ws://localhost:8000/ws");
+        ws.binaryType = "arraybuffer";
+
+        const img = document.getElementById("video");
+
+        ws.onmessage = function(event) {
+            const blob = new Blob([event.data], { type: "image/jpeg" });
+            const url = URL.createObjectURL(blob);
+            img.src = url;
+
+            // Optional: free memory after rendering
+            img.onload = () => URL.revokeObjectURL(url);
+        };
+    </script>
 </body>
 </html>

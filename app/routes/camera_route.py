@@ -1,14 +1,13 @@
 # FastAPI Components
 from fastapi import  APIRouter
-from fastapi.responses import StreamingResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.requests import Request
+from fastapi.responses import HTMLResponse
+from fastapi import WebSocket
 # Camera Feeder
 from app.utils.camera import CameraFeeder
 # Load config
 from app.core.config import CAMERA_INDEX
 # Other dependencies
-import os
+import os, asyncio, time
 
 # Check HTML file existed
 camera_path = "app/templates/camera_feed.html"
@@ -19,14 +18,25 @@ if not os.path.exists(camera_path):
 camera_route = APIRouter()
 camera_feeder = CameraFeeder(camera_index = CAMERA_INDEX)
 
-# Set up Jinja2 templates directory
-templates = Jinja2Templates(directory="app/templates")
-
 @camera_route.get("/")
-async def index(request: Request):
-    return templates.TemplateResponse("camera_feed.html", {"request": request})
+async def get():
+    with open("app/templates/camera_feed.html", "r") as f:
+        html = f.read()
+    return HTMLResponse(content=html)
 
+@camera_route.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
 
-@camera_route.get("/video_feed")
-async def video_feed():
-    return StreamingResponse(camera_feeder.generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+    try:
+        while True:
+            begin = time.perf_counter()
+            frame_bytes = camera_feeder.generate_frames(format=".jpg", quality = 80)
+            if frame_bytes:
+                await websocket.send_bytes(frame_bytes)
+            await asyncio.sleep(0.01)  # ~30 FPS
+    except Exception as e:
+        print("WebSocket error:", e)
+    finally:
+        camera_feeder.release()
+
