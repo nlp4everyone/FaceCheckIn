@@ -1,6 +1,8 @@
 .idea
 .env
 app/__pycache__/
+app/core/__pycache__/
 app/core/config/__pycache__/
+app/utils/image/__pycache__/
 app/routes/__pycache__/
 app/utils/camera/__pycache__/

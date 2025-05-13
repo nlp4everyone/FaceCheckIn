@@ -1,4 +1,6 @@
 import cv2, base64
+from typing import Tuple, Union
+import numpy as np
 
 class CameraFeeder:
     def __init__(self,
@@ -11,7 +13,7 @@ class CameraFeeder:
 
     def generate_frames(self,
                         format: str = '.webp',
-                        quality: int = 80):
+                        quality: int = 80) -> Tuple[Union[bytes,None], Union[np.ndarray,None]]:
         while True:
             success, frame = self._camera.read()
             if not success:
@@ -27,9 +29,9 @@ class CameraFeeder:
 
             # Encode frame
             ret, buffer = cv2.imencode(format, frame, encode_param)
+            # When Empty
             if not ret:
-                return None
-
-            return buffer.tobytes()
+                return None, None
+            return buffer.tobytes(), frame
     def release(self):
         self._camera.release()

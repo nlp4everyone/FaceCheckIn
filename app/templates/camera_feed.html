@@ -17,7 +17,7 @@
             margin: 0 auto;
         }
 
-        img {
+        canvas {
             width: 100%;
             height: auto;
             border-radius: 8px;
@@ -53,6 +53,21 @@
             0%, 50%, 100% { opacity: 1; }
             25%, 75% { opacity: 0; }
         }
+
+        .status-box {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: center;
+            min-width: 200px;
+        }
     </style>
 </head>
 <body>
@@ -61,22 +76,62 @@
             <div class="dot"></div>
             <span>Live</span>
         </div>
-        <img id="video" alt="Camera Feed">
+
+        <!-- ✅ Status text below the live indicator -->
+        <div id="status-text" class="status-box">Please place your face inside a red area</div>
+
+        <canvas id="videoCanvas"></canvas>
     </div>
 
     <script>
         const ws = new WebSocket("ws://localhost:8000/ws");
         ws.binaryType = "arraybuffer";
 
-        const img = document.getElementById("video");
+        const canvas = document.getElementById("videoCanvas");
+        const ctx = canvas.getContext("2d");
+        const statusText = document.getElementById("status-text");
+
+        const rectWidth = {{ rect_width }};
+        const rectHeight = {{ rect_height }};
 
         ws.onmessage = function(event) {
+            // Check if message is JSON or binary image
+            if (typeof event.data === "string") {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.result || msg.status) {
+                        statusText.textContent = msg.result || msg.status;
+                    }
+                } catch (err) {
+                    console.error("Failed to parse JSON:", err);
+                }
+                return;
+            }
+
+            // Binary image handling
             const blob = new Blob([event.data], { type: "image/jpeg" });
             const url = URL.createObjectURL(blob);
-            img.src = url;
+            const img = new Image();
 
-            // Optional: free memory after rendering
-            img.onload = () => URL.revokeObjectURL(url);
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                ctx.drawImage(img, 0, 0);
+
+                const x = (img.width - rectWidth) / 2;
+                const y = (img.height - rectHeight) / 2;
+
+                ctx.beginPath();
+                ctx.strokeStyle = "red";
+                ctx.lineWidth = 4;
+                ctx.rect(x, y, rectWidth, rectHeight);
+                ctx.stroke();
+
+                URL.revokeObjectURL(url);
+            };
+
+            img.src = url;
         };
     </script>
 </body>
