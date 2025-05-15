@@ -6,3 +6,6 @@ app/core/config/__pycache__/
 app/utils/image/__pycache__/
 app/routes/__pycache__/
 app/utils/camera/__pycache__/
+loggers/__pycache__/
+app/startup/__pycache__/
+app/utils/face/recognition/__pycache__/
