@@ -1,0 +1,2 @@
+class FrontalRanking:
+    pass

@@ -41,6 +41,7 @@ async def websocket_endpoint(websocket: WebSocket):
     collecting = False
     first_detected_time = None
     collected_detections = []
+    detected_images = []
 
     try:
         while True:
@@ -63,8 +64,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Send notification
                         await websocket.send_text(json.dumps({"status": f"Stop your motion for {int(FACE_WAIT_TIME)} second"}))
                         collected_detections = [detections]
+                        detected_images = [cropped_frame]
                     else:
                         collected_detections.append(detections)
+                        detected_images.append(cropped_frame)
             except:
                 pass  # No face detected this frame
 
@@ -72,11 +75,10 @@ async def websocket_endpoint(websocket: WebSocket):
             if collecting and (asyncio.get_event_loop().time() - first_detected_time) >= FACE_WAIT_TIME:
                 # Process collected detections
                 print(f"Collected {len(collected_detections)} detections in {int(FACE_WAIT_TIME)} second")
-                print(collected_detections[0])
-                # 👉 Process collected_detections here
                 # Reset state
                 collecting = False
                 collected_detections.clear()
+                detected_images.clear()
                 # Send notification back
                 await websocket.send_text(json.dumps({"status": "Please place your face inside a red area"}))
 

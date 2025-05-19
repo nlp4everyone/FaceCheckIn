@@ -1,1 +1,2 @@
 from .mtcnn_recognition import MTCNNRecognition
+from .base_recognition import FaceDetection
