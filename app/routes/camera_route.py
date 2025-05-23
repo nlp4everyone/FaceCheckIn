@@ -3,17 +3,18 @@ from fastapi import APIRouter, WebSocket, Request
 from fastapi.templating import Jinja2Templates
 # Camera Feeder
 from app.utils.camera import CameraFeeder
-from app.utils.image import ImageProcessing
+from app.utils import is_selected_image
 # Load config
 from app.core.config import CAMERA_INDEX
 from app.core.constants import (CAMERA_QUALITY,
                                 RECT_HEIGHT,
                                 RECT_WIDTH,
                                 FACE_WAIT_TIME)
+from app.utils.face.frontal_metrics import FrontalFaceFiltering
 # Getting model
 from app.startup import get_face_recognition_model
 # Other dependencies
-import os, asyncio, json
+import os, asyncio, json, cv2, uuid
 
 # Check HTML file existed
 camera_path = "app/templates/camera_feed.html"
@@ -37,25 +38,26 @@ async def get(request: Request):
 @camera_route.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    mtcnn = get_face_recognition_model()
+
+    # Init params
+    mediapipe = get_face_recognition_model()
     collecting = False
     first_detected_time = None
+    face_frames = []
     collected_detections = []
-    detected_images = []
 
     try:
         while True:
             # Read from camera
             frame_bytes, frame_numpy = camera_feeder.generate_frames(format=".jpg",
                                                                      quality = CAMERA_QUALITY)
-            # Cropped centre frame
-            cropped_frame = ImageProcessing.crop_centre_frame(frame = frame_numpy,
-                                                              size = (RECT_WIDTH, RECT_HEIGHT))
+            # *** Add Fixed Frame Skipping for better speed and offload CPU ***
+
             try:
                 # Handle face detection
-                detections = mtcnn.detect_faces(cropped_frame)
-                # When detection existed
-                if detections:
+                detections = mediapipe.detect_faces(frame_numpy)
+                # When detection existed and archive desired IOU
+                if detections and is_selected_image(frame_numpy,tuple(detections[0].box),RECT_WIDTH,RECT_HEIGHT):
                     if not collecting:
                         # First detection arrives
                         collecting = True
@@ -63,25 +65,31 @@ async def websocket_endpoint(websocket: WebSocket):
                         first_detected_time = asyncio.get_event_loop().time()
                         # Send notification
                         await websocket.send_text(json.dumps({"status": f"Stop your motion for {int(FACE_WAIT_TIME)} second"}))
-                        collected_detections = [detections]
-                        detected_images = [cropped_frame]
+                        face_frames = [frame_numpy]
+                        collected_detections = detections
                     else:
-                        collected_detections.append(detections)
-                        detected_images.append(cropped_frame)
+                        face_frames.append(frame_numpy)
+                        collected_detections.extend(detections)
+
             except:
                 pass  # No face detected this frame
 
             # Check if 1 second has passed since first detection
             if collecting and (asyncio.get_event_loop().time() - first_detected_time) >= FACE_WAIT_TIME:
+                # *** Add MIN_ACCEPTED_FRAME_PERSENT ( For assuring enough frame for process) ***
                 # Process collected detections
-                print(f"Collected {len(collected_detections)} detections in {int(FACE_WAIT_TIME)} second")
+                print(f"Collected {len(face_frames)} detections in {int(FACE_WAIT_TIME)} second")
+                # Select most frontal face image from input
+                selected_frames = FrontalFaceFiltering.select_frames(frames = face_frames,
+                                                                     detections = collected_detections)
                 # Reset state
                 collecting = False
-                collected_detections.clear()
-                detected_images.clear()
+                face_frames.clear()
                 # Send notification back
-                await websocket.send_text(json.dumps({"status": "Please place your face inside a red area"}))
+                await websocket.send_text(
+                    json.dumps({"status": "Please place your face inside a red area"}))
 
+            # Send frame
             if frame_bytes:
                 await websocket.send_bytes(frame_bytes)
             await asyncio.sleep(0.01)  # ~30 FPS
