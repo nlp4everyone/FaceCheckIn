@@ -1,2 +1,3 @@
 from .mtcnn_recognition import MTCNNRecognition
-from .base_recognition import FaceDetection
+from .mediapipe_recognition import MediapipeDetection
+from .base_recognition import FaceDetection, FacialKeyPoints
