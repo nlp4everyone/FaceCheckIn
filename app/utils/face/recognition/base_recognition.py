@@ -1,10 +1,20 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 import numpy as np
+
+class FacialKeyPoints(BaseModel):
+    left_eye :Optional[List[float]] = None
+    right_eye:Optional[List[float]] = None
+    nose: Optional[List[float]] = None
+    left_mouth: Optional[List[float]] = None
+    right_mouth: Optional[List[float]] = None
+    chin: Optional[List[float]] = None
+
+
 class FaceDetection(BaseModel):
     box :Optional[List[int]] = None
     confidence :Optional[float] = None
-    keypoints :Optional[dict] = None
+    keypoints :Optional[FacialKeyPoints] = None
 
 class BaseRecognition:
     def __init__(self):

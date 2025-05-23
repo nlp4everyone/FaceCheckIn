@@ -1,25 +1,21 @@
 from typing import List, Literal
 import numpy as np
 from app.utils.face.frontal_metrics import MediapipeMetric
+from app.utils.face.recognition import FaceDetection
 
 
 class FrontalFaceFiltering:
-    def __init__(self,
-                 backends :Literal["mediapipe"] = "mediapipe"):
-        if backends == "mediapipe":
-            self._backend_metric = MediapipeMetric()
-        else:
-            raise NotImplementedError()
-
+    @staticmethod
     def select_frames(self,
                       frames :List[np.ndarray],
+                      detections :List[FaceDetection],
                       top_k :int = 1):
         # Score for evaluating frontal
-        frontal_scores = [self._backend_metric.calculate_frontalness_score(frame) for frame in frames]
+        frontal_scores = [MediapipeMetric.extract_facial_properties(frame) for frame in frames]
         # Add index and remove None value
         indexed_scores = [(i,score) for (i, score) in enumerate(frontal_scores) if score is not None]
         # Sort value based in score descendingly:
-        sorted_indexed_scores = sorted(indexed_scores,key = lambda x: x[1], reverse= True)
+        sorted_indexed_scores = sorted(indexed_scores,key = lambda x: x[1].score, reverse= True)
 
         # Select top-k element with highest score ( Most frontal)
         selected_scores = sorted_indexed_scores[:top_k]

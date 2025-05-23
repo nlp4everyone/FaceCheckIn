@@ -1,6 +1,6 @@
 from facenet_pytorch import MTCNN
 # Base Recognition
-from .base_recognition import BaseRecognition, FaceDetection
+from .base_recognition import BaseRecognition, FaceDetection, FacialKeyPoints
 # Other component
 from typing import Literal, Union, List
 import numpy as np
@@ -41,13 +41,13 @@ class MTCNNRecognition(BaseRecognition):
             landmark = [[int(x), int(y)] for x, y in landmark.tolist()]
 
             # Append values
-            predictions.append(FaceDetection(box = box,
+            predictions.append(FaceDetection(box=box,
                                              confidence = prob,
-                                             keypoints = {"left_eye": landmark[0],
-                                                          "right_eye": landmark[1],
-                                                          "nose": landmark[2],
-                                                          "mouth_left": landmark[3],
-                                                          "mouth_right": landmark[4]}))
+                                             keypoints = FacialKeyPoints(left_eye = list(landmark[0]),
+                                                                         right_eye = list(landmark[1]),
+                                                                         nose = list(landmark[2]),
+                                                                         left_mouth = list(landmark[3]),
+                                                                         right_mouth = list(landmark[4]))))
         return predictions
 
     def batch_detect_faces(self,
