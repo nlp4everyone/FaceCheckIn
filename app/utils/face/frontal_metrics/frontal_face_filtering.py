@@ -6,12 +6,12 @@ from app.utils.face.recognition import FaceDetection
 
 class FrontalFaceFiltering:
     @staticmethod
-    def select_frames(self,
-                      frames :List[np.ndarray],
+    def select_frames(frames :List[np.ndarray],
                       detections :List[FaceDetection],
                       top_k :int = 1):
         # Score for evaluating frontal
-        frontal_scores = [MediapipeMetric.extract_facial_properties(frame) for frame in frames]
+        frontal_scores = [MediapipeMetric.extract_facial_properties(detection = detection,
+                                                                    frame = frame) for (detection,frame) in zip(detections,frames)]
         # Add index and remove None value
         indexed_scores = [(i,score) for (i, score) in enumerate(frontal_scores) if score is not None]
         # Sort value based in score descendingly:
