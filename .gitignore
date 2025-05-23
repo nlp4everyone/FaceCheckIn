@@ -9,3 +9,4 @@ app/utils/camera/__pycache__/
 loggers/__pycache__/
 app/startup/__pycache__/
 app/utils/face/recognition/__pycache__/
+app/utils/face/frontal_metrics/__pycache__/
