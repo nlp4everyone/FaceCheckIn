@@ -10,7 +10,8 @@ from app.core.constants import (CAMERA_QUALITY,
                                 RECT_HEIGHT,
                                 RECT_WIDTH,
                                 FACE_WAIT_TIME,
-                                FRAME_SKIPPING_ITERATION)
+                                FRAME_SKIPPING_ITERATION,
+                                MIN_ACCEPTED_FPS)
 from app.utils.face.frontal_metrics import FrontalFaceFiltering
 # Getting model
 from app.startup import get_face_recognition_model
@@ -59,7 +60,7 @@ async def websocket_endpoint(websocket: WebSocket):
             total_frames +=1
 
             try:
-                # *** Add Fixed Frame Skipping for better speed and offload CPU ***
+                # Add Fixed Frame Skipping for better speed and offload CPU
                 if total_frames % FRAME_SKIPPING_ITERATION == 0:
                     # Handle face detection
                     detections = mediapipe.detect_faces(frame_numpy)
@@ -81,27 +82,39 @@ async def websocket_endpoint(websocket: WebSocket):
             except:
                 pass  # No face detected this frame
 
-            # Check if 1 second has passed since first detection
+            # Send frame to websocket
+            if frame_bytes:
+                await websocket.send_bytes(frame_bytes)
+            await asyncio.sleep(0.01)  # ~30 FPS
+
+            total_detected_frames = len(face_frames)
+            # Check if FACE_WAIT_TIME second has passed since first detection
             if collecting and (asyncio.get_event_loop().time() - first_detected_time) >= FACE_WAIT_TIME:
-                # *** Add MIN_ACCEPTED_FRAME_PERSENT ( For assuring enough frame for process) ***
+                # Reset state
+                collecting = False
+                # For assuring enough frame for processing by archiving minimum FPS
+                current_fps = total_detected_frames / FACE_WAIT_TIME
+                # If current FPS less than MIN ACCEPTED FPS, skip turn
+                if current_fps < MIN_ACCEPTED_FPS:
+                    # Send notification
+                    await websocket.send_text(json.dumps({"status": "Too quick, please slow down your motion!"}))
+                    # Reset total frames
+                    total_frames = 0
+                    continue
+
                 # Process collected detections
-                print(f"Collected {len(face_frames)} detections in {int(FACE_WAIT_TIME)} second")
+                print(f"Collected {total_detected_frames} detections in {int(FACE_WAIT_TIME)} second")
                 # Select most frontal face image from input
                 selected_frames = FrontalFaceFiltering.select_frames(frames = face_frames,
                                                                      detections = collected_detections)
                 # Saved frame to Disk
-                cv2.imwrite(f"{uuid.uuid4()}.png", selected_frames[0])
+                # cv2.imwrite(f"{uuid.uuid4()}.png", selected_frames[0])
                 # Reset state
-                collecting = False
                 face_frames.clear()
                 # Send notification back
                 await websocket.send_text(
                     json.dumps({"status": "Please place your face inside a red area"}))
 
-            # Send frame
-            if frame_bytes:
-                await websocket.send_bytes(frame_bytes)
-            await asyncio.sleep(0.01)  # ~30 FPS
     except Exception as e:
         print("WebSocket error:", e)
     finally:
