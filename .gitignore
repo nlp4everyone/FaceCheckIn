@@ -1,5 +1,6 @@
 .idea
 .env
+test.py
 app/__pycache__/
 app/core/__pycache__/
 app/core/config/__pycache__/
@@ -10,4 +11,5 @@ app/utils/camera/__pycache__/
 loggers/__pycache__/
 app/startup/__pycache__/
 app/utils/face/recognition/__pycache__/
+app/core/status_message/__pycache__/
 app/utils/face/frontal_metrics/__pycache__/

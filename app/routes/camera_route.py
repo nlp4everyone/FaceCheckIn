@@ -12,6 +12,11 @@ from app.core.constants import (CAMERA_QUALITY,
                                 FACE_WAIT_TIME,
                                 FRAME_SKIPPING_ITERATION,
                                 MIN_ACCEPTED_FPS)
+# Load message content
+from app.core.status_message import (QUICK_MOTION_MSG,
+                                     FOLLOWUP_MSG,
+                                     DETECTION_START_MSG)
+# Detection filter
 from app.utils.face.frontal_metrics import FrontalFaceFiltering
 # Getting model
 from app.startup import get_face_recognition_model
@@ -72,7 +77,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             # Declare first appearance time
                             first_detected_time = asyncio.get_event_loop().time()
                             # Send notification
-                            await websocket.send_text(json.dumps({"status": f"Stop your motion for {int(FACE_WAIT_TIME)} second"}))
+                            await websocket.send_text(json.dumps(DETECTION_START_MSG(FACE_WAIT_TIME)))
                             face_frames = [frame_numpy]
                             collected_detections = detections
                         else:
@@ -97,7 +102,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # If current FPS less than MIN ACCEPTED FPS, skip turn
                 if current_fps < MIN_ACCEPTED_FPS:
                     # Send notification
-                    await websocket.send_text(json.dumps({"status": "Too quick, please slow down your motion!"}))
+                    await websocket.send_text(json.dumps(QUICK_MOTION_MSG))
                     # Reset total frames
                     total_frames = 0
                     continue
@@ -112,8 +117,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Reset state
                 face_frames.clear()
                 # Send notification back
-                await websocket.send_text(
-                    json.dumps({"status": "Please place your face inside a red area"}))
+                await websocket.send_text(json.dumps(FOLLOWUP_MSG))
 
     except Exception as e:
         print("WebSocket error:", e)
