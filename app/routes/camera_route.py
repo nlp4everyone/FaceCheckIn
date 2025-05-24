@@ -9,7 +9,8 @@ from app.core.config import CAMERA_INDEX
 from app.core.constants import (CAMERA_QUALITY,
                                 RECT_HEIGHT,
                                 RECT_WIDTH,
-                                FACE_WAIT_TIME)
+                                FACE_WAIT_TIME,
+                                FRAME_SKIPPING_ITERATION)
 from app.utils.face.frontal_metrics import FrontalFaceFiltering
 # Getting model
 from app.startup import get_face_recognition_model
@@ -39,10 +40,13 @@ async def get(request: Request):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    # Init params
+    # Init models
     mediapipe = get_face_recognition_model()
+    # Init params
     collecting = False
     first_detected_time = None
+    total_frames = 0
+    # Init results
     face_frames = []
     collected_detections = []
 
@@ -51,25 +55,28 @@ async def websocket_endpoint(websocket: WebSocket):
             # Read from camera
             frame_bytes, frame_numpy = camera_feeder.generate_frames(format=".jpg",
                                                                      quality = CAMERA_QUALITY)
-            # *** Add Fixed Frame Skipping for better speed and offload CPU ***
+            # Accumulate frames
+            total_frames +=1
 
             try:
-                # Handle face detection
-                detections = mediapipe.detect_faces(frame_numpy)
-                # When detection existed and archive desired IOU
-                if detections and is_selected_image(frame_numpy,tuple(detections[0].box),RECT_WIDTH,RECT_HEIGHT):
-                    if not collecting:
-                        # First detection arrives
-                        collecting = True
-                        # Declare first appearance time
-                        first_detected_time = asyncio.get_event_loop().time()
-                        # Send notification
-                        await websocket.send_text(json.dumps({"status": f"Stop your motion for {int(FACE_WAIT_TIME)} second"}))
-                        face_frames = [frame_numpy]
-                        collected_detections = detections
-                    else:
-                        face_frames.append(frame_numpy)
-                        collected_detections.extend(detections)
+                # *** Add Fixed Frame Skipping for better speed and offload CPU ***
+                if total_frames % FRAME_SKIPPING_ITERATION == 0:
+                    # Handle face detection
+                    detections = mediapipe.detect_faces(frame_numpy)
+                    # When detection existed and archive desired IOU
+                    if detections and is_selected_image(frame_numpy,tuple(detections[0].box),RECT_WIDTH,RECT_HEIGHT):
+                        if not collecting:
+                            # First detection arrives
+                            collecting = True
+                            # Declare first appearance time
+                            first_detected_time = asyncio.get_event_loop().time()
+                            # Send notification
+                            await websocket.send_text(json.dumps({"status": f"Stop your motion for {int(FACE_WAIT_TIME)} second"}))
+                            face_frames = [frame_numpy]
+                            collected_detections = detections
+                        else:
+                            face_frames.append(frame_numpy)
+                            collected_detections.extend(detections)
 
             except:
                 pass  # No face detected this frame
@@ -82,6 +89,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Select most frontal face image from input
                 selected_frames = FrontalFaceFiltering.select_frames(frames = face_frames,
                                                                      detections = collected_detections)
+                # Saved frame to Disk
+                cv2.imwrite(f"{uuid.uuid4()}.png", selected_frames[0])
                 # Reset state
                 collecting = False
                 face_frames.clear()
