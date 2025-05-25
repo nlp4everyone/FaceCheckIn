@@ -42,6 +42,13 @@ async def get(request: Request):
         "rect_height": RECT_HEIGHT
     })
 
+async def send_delayed_notification(msg :dict,
+                                    websocket :WebSocket,
+                                    delay_time :int = 5):
+    # Schedule follow-up message 5 seconds later (non-blocking)
+    await asyncio.sleep(delay_time)
+    await websocket.send_text(json.dumps(msg))
+
 @camera_route.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -105,6 +112,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_text(json.dumps(QUICK_MOTION_MSG))
                     # Reset total frames
                     total_frames = 0
+                    # Display followup msg again after defined seconds.
+                    asyncio.create_task(send_delayed_notification(msg = FOLLOWUP_MSG,
+                                                                  websocket = websocket))
                     continue
 
                 # Process collected detections
