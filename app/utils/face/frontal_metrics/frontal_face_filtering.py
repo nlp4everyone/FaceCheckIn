@@ -1,14 +1,14 @@
-from typing import List, Literal
+from typing import List, Tuple
 import numpy as np
 from app.utils.face.frontal_metrics import MediapipeMetric
 from app.utils.face.recognition import FaceDetection
-
+from app.utils.face.frontal_metrics import FrontalProperties
 
 class FrontalFaceFiltering:
     @staticmethod
     def select_frames(frames :List[np.ndarray],
                       detections :List[FaceDetection],
-                      top_k :int = 1):
+                      top_k :int = 1) -> Tuple[List[np.ndarray],List[Tuple[int,FrontalProperties]]]:
         # Score for evaluating frontal
         frontal_scores = [MediapipeMetric.extract_facial_properties(detection = detection,
                                                                     frame = frame) for (detection,frame) in zip(detections,frames)]
@@ -20,4 +20,4 @@ class FrontalFaceFiltering:
         # Select top-k element with highest score ( Most frontal)
         selected_scores = sorted_indexed_scores[:top_k]
         # Return frame with highest score
-        return [frames[index] for (index, _) in selected_scores]
+        return [frames[index] for (index, _) in selected_scores],selected_scores
