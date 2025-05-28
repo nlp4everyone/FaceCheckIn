@@ -37,7 +37,7 @@ camera_route = APIRouter()
 camera_feeder = CameraFeeder(camera_index = CAMERA_INDEX)
 templates = Jinja2Templates(directory = "app/templates")
 
-@camera_route.get("/")
+@camera_route.get("/", include_in_schema = False)
 async def get(request: Request):
     # Return
     return templates.TemplateResponse("camera_feed.html", {

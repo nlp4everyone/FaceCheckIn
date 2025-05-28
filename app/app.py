@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 # Define route
-from .routes import camera_route
+from .routes import camera_route, preview_router
 # Define startup
 from .startup import (init_models)
 # Components
@@ -10,6 +10,7 @@ import time
 app = FastAPI()
 # Append route
 app.include_router(camera_route)
+app.include_router(preview_router)
 
 @app.on_event("startup")
 async def startup_event():
