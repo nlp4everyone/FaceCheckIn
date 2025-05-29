@@ -11,3 +11,12 @@ FACE_SIMILARITY_THRESHOLD = 0.6
 
 # Optimization params
 FRAME_SKIPPING_ITERATION = 2 # Default is 1, which use all frames for detecting. Increase for skipp
+
+# Qdrant Default config
+FACE_EMBEDDING_DIMS = 512
+DEFAULT_SIMILARITY_TOP_K = 3
+
+# Minio default config
+MINIO_REGISTERED_BUCKET = "registered-face"
+
+
