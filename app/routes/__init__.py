@@ -1,2 +1,3 @@
 from .camera_route import camera_route
 from .preview_router import preview_router
+from .face_management_router import face_management_router

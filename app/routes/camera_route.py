@@ -6,14 +6,14 @@ from app.utils.camera import CameraFeeder
 from app.utils import is_selected_image
 # Load config
 from app.core.config import CAMERA_INDEX
-from app.core.constants import (CAMERA_QUALITY,
-                                RECT_HEIGHT,
-                                RECT_WIDTH,
-                                FACE_WAIT_TIME,
-                                FRAME_SKIPPING_ITERATION,
-                                MIN_ACCEPTED_FPS,
-                                SPAM_COOLDOWN_SECONDS,
-                                FACE_SIMILARITY_THRESHOLD)
+from app.core.config.constants import (CAMERA_QUALITY,
+                                       RECT_HEIGHT,
+                                       RECT_WIDTH,
+                                       FACE_WAIT_TIME,
+                                       FRAME_SKIPPING_ITERATION,
+                                       MIN_ACCEPTED_FPS,
+                                       SPAM_COOLDOWN_SECONDS,
+                                       FACE_SIMILARITY_THRESHOLD)
 # Load message content
 from app.core.status_message import (QUICK_MOTION_MSG,
                                      DETECTION_START_MSG,
@@ -25,7 +25,7 @@ from app.utils.face.embedding import calculate_similarity
 # Getting model
 from app.startup import get_face_recognition_model,get_face_embedding_model
 # Other dependencies
-import os, asyncio, json, cv2, uuid
+import os, asyncio, json
 
 # Check HTML file existed
 camera_path = "app/templates/camera_feed.html"
