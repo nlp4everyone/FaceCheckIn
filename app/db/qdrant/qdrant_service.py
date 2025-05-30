@@ -3,7 +3,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import PointStruct, VectorParams, Distance
 from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 # Typing
-from typing import List
+from typing import List, Optional
 import uuid
 # Face Request
 from app.core.schema import (FaceRequest,
@@ -110,11 +110,15 @@ class QdrantService(BaseVectorStore):
 
     async def retrieve_points(self,
                               embedding :List[float],
-                              similarity_top_k :int = 3) -> List[RetrievedResult]:
+                              similarity_top_k :int = 3,
+                              score_threshold :Optional[float] = None,
+                              **kwargs) -> List[RetrievedResult]:
         """Retrive similar point in Qdrant from inputing value"""
         searched_results = await self._client.search(collection_name = self._collection_name,
                                                      query_vector = embedding,
-                                                     limit = similarity_top_k)
+                                                     limit = similarity_top_k,
+                                                     score_threshold = score_threshold,
+                                                     **kwargs)
         # Empty response
         if len(searched_results) == 0:
             return []

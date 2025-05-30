@@ -3,27 +3,22 @@ from fastapi import APIRouter, WebSocket, Request
 from fastapi.templating import Jinja2Templates
 # Camera Feeder
 from app.utils.camera import CameraFeeder
-from app.utils import is_selected_image
+from app.utils import is_standard_image
 # Load config
 from app.core.config import CAMERA_INDEX
-from app.core.config.constants import (CAMERA_QUALITY,
-                                       RECT_HEIGHT,
-                                       RECT_WIDTH,
-                                       FACE_WAIT_TIME,
-                                       FRAME_SKIPPING_ITERATION,
-                                       MIN_ACCEPTED_FPS,
-                                       SPAM_COOLDOWN_SECONDS,
-                                       FACE_SIMILARITY_THRESHOLD)
+from app.core.config.constants import *
 # Load message content
-from app.core.status_message import (QUICK_MOTION_MSG,
-                                     DETECTION_START_MSG,
-                                     SPAMMING_MSG)
+from app.core.status_message import *
 # Detection filter
 from app.utils.face.frontal_metrics import FrontalFaceFiltering
 from app.utils.face.alignment import BasicAlignment
 from app.utils.face.embedding import calculate_similarity
 # Getting model
-from app.startup import get_face_recognition_model,get_face_embedding_model
+from app.startup import (get_face_recognition_model,
+                         get_face_embedding_model,
+                         get_qdrant_service)
+# Logger
+from loggers import SystemLogger
 # Other dependencies
 import os, asyncio, json
 
@@ -60,6 +55,7 @@ async def websocket_endpoint(websocket: WebSocket):
     # Init models
     mediapipe = get_face_recognition_model()
     embedding_model = get_face_embedding_model()
+    qdrant_service = get_qdrant_service()
 
     # Init params
     collecting = False
@@ -70,6 +66,7 @@ async def websocket_endpoint(websocket: WebSocket):
     collected_detections = []
     last_face_embedding = None
     last_alert_time = None
+    last_detected_time = None
 
     try:
         while True:
@@ -84,16 +81,32 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Skip if in cooldown
             in_spam_cooldown = last_alert_time is not None and (current_time - last_alert_time) < SPAM_COOLDOWN_SECONDS
+            # Send frame to websocket
+            if frame_bytes:
+                await websocket.send_bytes(frame_bytes)
+            await asyncio.sleep(0.01)  # ~30 FPS
+
             try:
                 # Add Fixed Frame Skipping for better speed and offload CPU
                 if total_frames % FRAME_SKIPPING_ITERATION == 0:
                     # Handle face detection
                     detections = mediapipe.detect_faces(frame_numpy)
+
+                    # Specify whether image choosen or not
+                    standarded_image = is_standard_image(frame_numpy,
+                                                         face_bbox = tuple(detections[0].box),
+                                                         rect_width = RECT_WIDTH,
+                                                         rect_height = RECT_HEIGHT,
+                                                         accepted_threshold = IOU_ACCEPTED_THRESHOLD)
                     # When detection existed and archive desired IOU
-                    if detections and is_selected_image(frame_numpy,tuple(detections[0].box),RECT_WIDTH,RECT_HEIGHT):
+                    if detections and standarded_image:
                         # By pass
                         if not collecting:
-                            # First detection arrives
+                            # Set minimum time between success check in time
+                            if last_detected_time and current_time - last_detected_time < MINIMUM_INSPECT_DURATION:
+                                collecting = False
+                                continue
+
                             collecting = True
                             # Declare first appearance time
                             first_detected_time = asyncio.get_event_loop().time()
@@ -108,11 +121,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             except:
                 pass  # No face detected this frame
-
-            # Send frame to websocket
-            if frame_bytes:
-                await websocket.send_bytes(frame_bytes)
-            await asyncio.sleep(0.01)  # ~30 FPS
 
             total_detected_frames = len(face_frames)
 
@@ -136,7 +144,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Reset total frames
                     total_frames = 0
                     continue
-
                 # Process collected detections
                 print(f"Collected {total_detected_frames} detections in {int(FACE_WAIT_TIME)} second")
                 # Select most frontal face image from input
@@ -159,7 +166,17 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Define last alert time
                         last_alert_time = asyncio.get_event_loop().time()
                 # *** Do retrieve ***
-
+                face_retrieved = await qdrant_service.retrieve_points(face_embedding[0].tolist(),
+                                                                      score_threshold = FACE_SIMILARITY_THRESHOLD)
+                if face_retrieved:
+                    user_info = face_retrieved[0].payload
+                    # When found face
+                    await websocket.send_text(json.dumps(FACE_SINGED_MSG(user_info.get("face_name"))))
+                else:
+                    # Opposite
+                    await websocket.send_text(json.dumps(FACE_NOT_FOUND_MSG))
+                # Last detected time
+                last_detected_time = asyncio.get_event_loop().time()
                 # Set value to last embedding
                 last_face_embedding = face_embedding
                 # Reset state

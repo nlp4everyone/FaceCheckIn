@@ -5,18 +5,20 @@ RECT_HEIGHT :int = 250
 
 # System params
 FACE_WAIT_TIME :float = 3.0
-SPAM_COOLDOWN_SECONDS = 10
-MIN_ACCEPTED_FPS = 5 # Minimum FPS each turn for avoiding quick motion
-FACE_SIMILARITY_THRESHOLD = 0.6
+SPAM_COOLDOWN_SECONDS :int = 10
+MIN_ACCEPTED_FPS :int = 5 # Minimum FPS each turn for avoiding quick motion
+FACE_SIMILARITY_THRESHOLD :float = 0.5
+IOU_ACCEPTED_THRESHOLD :float = 0.25
+MINIMUM_INSPECT_DURATION :int = 3
 
 # Optimization params
-FRAME_SKIPPING_ITERATION = 2 # Default is 1, which use all frames for detecting. Increase for skipp
+FRAME_SKIPPING_ITERATION :int = 2 # Default is 1, which use all frames for detecting. Increase for skipp
 
 # Qdrant Default config
-FACE_EMBEDDING_DIMS = 512
-DEFAULT_SIMILARITY_TOP_K = 3
+FACE_EMBEDDING_DIMS :int = 512
+DEFAULT_SIMILARITY_TOP_K :int = 3
 
 # Minio default config
-MINIO_REGISTERED_BUCKET = "registered-face"
+MINIO_REGISTERED_BUCKET :str = "registered-face"
 
 

@@ -16,3 +16,13 @@ DETECTION_START_MSG = lambda wait_time: {
     "status": f"Stop your motion for {int(wait_time)} second",
     "emoji": "U+1F31F"
 }
+
+FACE_NOT_FOUND_MSG = {
+    "status": "Face Not Found/ Unregistered",
+    "emoji": "U+274C"
+}
+
+FACE_SINGED_MSG = lambda user_name: {
+    "status": f"User: {user_name} has checked in done!",
+    "emoji": "U+2705"
+}

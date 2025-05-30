@@ -28,11 +28,21 @@ def calculate_iou(boxA, boxB):
 
     return inter_area / union
 
-def is_selected_image(frame :np.ndarray,
+def is_standard_image(frame :np.ndarray,
                       face_bbox :Tuple[int,int,int,int],
                       rect_width :int,
                       rect_height :int,
                       accepted_threshold :float = 0.25) -> bool:
+    """
+    Function  for deciding image with face is good enough for processing.
+    Its must achieves minimum threshold for assuring quality.
+    :param frame: Image input (np.ndarray)
+    :param face_bbox: Bbox contains the coordination of a face
+    :param rect_width:
+    :param rect_height:
+    :param accepted_threshold:
+    :return:
+    """
     # Get the face information
     h, w = frame.shape[:2]
     # Centered point of image

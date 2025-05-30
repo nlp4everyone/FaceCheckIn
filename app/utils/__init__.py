@@ -1,1 +1,1 @@
-from .utils import is_selected_image
+from .utils import is_standard_image
