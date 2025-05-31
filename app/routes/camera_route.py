@@ -17,6 +17,8 @@ from app.utils.face.embedding import calculate_similarity
 from app.startup import (get_face_recognition_model,
                          get_face_embedding_model,
                          get_qdrant_service)
+# Timer
+from app.utils.timer import Timer
 # Logger
 from loggers import SystemLogger
 # Other dependencies
@@ -29,8 +31,12 @@ if not os.path.exists(camera_path):
 
 # Define router
 camera_route = APIRouter()
+# Camera Feeder
 camera_feeder = CameraFeeder(camera_index = CAMERA_INDEX)
+# Template
 templates = Jinja2Templates(directory = "app/templates")
+# Timer
+timer = Timer("Data Pipeline")
 
 @camera_route.get("/", include_in_schema = False)
 async def get(request: Request):
@@ -144,18 +150,29 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Reset total frames
                     total_frames = 0
                     continue
+
+                # Start timer
+                timer.start()
                 # Process collected detections
-                print(f"Collected {total_detected_frames} detections in {int(FACE_WAIT_TIME)} second")
+                SystemLogger.success(f"Collected {total_detected_frames} detections in {int(FACE_WAIT_TIME)} second")
                 # Select most frontal face image from input
                 selected_frames, detection_results = FrontalFaceFiltering.select_frames(frames = face_frames,
                                                                                         detections = collected_detections)
+                # Mark time
+                timer.mark("Sorting frame duration")
+
                 # Keypoint
                 keypoint = detection_results[0][1].model_dump().get("keypoint")
                 # Aligned image
                 aligned_image = BasicAlignment.align_face_5points(image = selected_frames[0],
                                                                   landmarks = keypoint)
+                # Mark
+                timer.mark("Alignment duration")
+
                 # Embedding
                 face_embedding = embedding_model.embed(aligned_image)
+                # Mark
+                timer.mark("Embedding duration")
 
                 # When last face is not empty, compare
                 if last_face_embedding is not None:
@@ -168,6 +185,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 # *** Do retrieve ***
                 face_retrieved = await qdrant_service.retrieve_points(face_embedding[0].tolist(),
                                                                       score_threshold = FACE_SIMILARITY_THRESHOLD)
+                # Mark
+                timer.mark("Retrieving duration")
                 if face_retrieved:
                     user_info = face_retrieved[0].payload
                     # When found face
@@ -179,6 +198,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 last_detected_time = asyncio.get_event_loop().time()
                 # Set value to last embedding
                 last_face_embedding = face_embedding
+
+                # Make report
+                timer.stop()
+                reports = timer.report()
+                # Logger
+                for report in reports: SystemLogger.info(report)
+
                 # Reset state
                 face_frames.clear()
 
