@@ -7,9 +7,7 @@ from app.utils.face.alignment import BasicAlignment
 from app.startup import (get_face_recognition_model,
                          get_face_embedding_model,
                          get_qdrant_service,
-                         get_registered_minio)
-# Other components
-from datetime import datetime
+                         get_minio_storage)
 # Other components
 from datetime import datetime
 # Log
@@ -20,7 +18,7 @@ from app.core.schema import FaceRequest
 from app.core.exceptions import (UserNotFoundException,
                                  UserExistedException,
                                  FaceNotFoundException)
-from app.core.config.constants import DEFAULT_SIMILARITY_TOP_K
+from app.core.config.constants import *
 
 # ekyc router
 face_management_router = APIRouter()
@@ -37,7 +35,7 @@ async def face_register(face_id :str = Form(...),
     face_detector = get_face_recognition_model()
     face_embedding_model = get_face_embedding_model()
     # Minio
-    registered_minio = get_registered_minio()
+    minio_storage = get_minio_storage()
     # Qdrant
     qdrant_service = get_qdrant_service()
 
@@ -56,8 +54,8 @@ async def face_register(face_id :str = Form(...),
                             detail = "No found face!")
 
     # Resized to fixed size image (Reducing time for processing)
-    image_numpy = ImagePreprocess.resize_image_keep_aspect_ratio(image_numpy,
-                                                                 fixed_width = 512)
+    image_numpy,_  = ImagePreprocess.resize_image_keep_aspect_ratio(image_numpy,
+                                                                    fixed_width = DOWNSCALE_IMAGE_WIDTH)
 
     try:
         # Logging
@@ -91,10 +89,13 @@ async def face_register(face_id :str = Form(...),
         SystemLogger.success("Add new face vector to Qdrant")
         # Upload image to minio (With compressed version of image)
         compressed_image = ImagePreprocess.compress_image(image_numpy,
-                                                          quality = 70)
+                                                          quality = COMPRESS_IMAGE_RATIO)
+
+        # *** Change file name ***
         # Upload image
-        result = await registered_minio.aupload_image(image = compressed_image,
-                                                      image_name = file.filename)
+        result = await minio_storage.aupload_image(bucket_name = MINIO_REGISTERED_BUCKET,
+                                                   image = compressed_image,
+                                                   image_name = file.filename)
         # Return
         return inserted_result
     except UserExistedException as e:
@@ -107,7 +108,7 @@ async def face_register(face_id :str = Form(...),
 @face_management_router.delete("/face_delete")
 async def face_delete(face_id :str):
     # Minio
-    registered_minio = get_registered_minio()
+    minio_storage = get_minio_storage()
     # Qdrant
     qdrant_service = get_qdrant_service()
 
@@ -117,7 +118,8 @@ async def face_delete(face_id :str):
         SystemLogger.success(f"Remove face {face_id} from Qdrant")
 
         # Remove object from Minio (If existed)
-        await registered_minio.aremove_image(response.data.get("image_name"))
+        await minio_storage.aremove_image(image_name = response.data.get("image_name"),
+                                          bucket_name = MINIO_REGISTERED_BUCKET)
         # Logging
         SystemLogger.success(f"Remove face {face_id} from Minio")
         # Return
@@ -144,8 +146,8 @@ async def face_retrieve(file: UploadFile = File(...),
     # Convert as numpy
     image_numpy = ImagePreprocess.bytes_to_numpy(image_byte)
     # Resized to fixed size image (Reducing time for processing)
-    image_numpy = ImagePreprocess.resize_image_keep_aspect_ratio(image_numpy,
-                                                                 fixed_width = 512)
+    image_numpy, _ = ImagePreprocess.resize_image_keep_aspect_ratio(image_numpy,
+                                                                 fixed_width = DOWNSCALE_IMAGE_WIDTH)
 
     # Detecting face
     detection = face_detector.detect_faces(image_numpy)

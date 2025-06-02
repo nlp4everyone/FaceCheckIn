@@ -5,5 +5,5 @@ from .startup import (init_models,
                       get_qdrant_service,
                       init_qdrant_service,
                       init_minio_storage,
-                      get_registered_minio)
+                      get_minio_storage)
 

@@ -7,6 +7,7 @@ from .routes import (camera_route,
 from .startup import (init_models,
                       init_qdrant_service,
                       init_minio_storage)
+from .core.config.constants import *
 # Components
 from loggers import SystemLogger
 import time
@@ -43,6 +44,9 @@ async def startup_event():
     qdrant_service = init_qdrant_service()
     await qdrant_service.create_collection()
     # Init minio
-    init_minio_storage()
+    minio_storage = init_minio_storage()
+    # Create bucket if not existed
+    minio_storage.create_bucket(MINIO_REGISTERED_BUCKET)
+    minio_storage.create_bucket(MINIO_CHECKIN_BUCKET)
     # Measure time for processing
     SystemLogger.success(f"Start up done after: {round(time.perf_counter() - start, 1)}s")

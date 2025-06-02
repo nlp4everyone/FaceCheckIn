@@ -6,21 +6,8 @@ from app.db.qdrant import QdrantService, Distance
 from app.db.minio import MinioObjectStorage
 
 # Config
-from app.core.config.constants import (FACE_EMBEDDING_DIMS,
-                                       MINIO_REGISTERED_BUCKET)
-from app.core.config import (MINIO_ACCESS_KEY,
-                             MINIO_SECRET_KEY,
-                             MINIO_HOST,
-                             QDRANT_HOST)
-
-# # Variable
-# mtcnn = None
-# ada_face = None
-# # Variable
-# face_embedding_model = None
-# mediapipe = None
-# qdrant_service = None
-# registered_minio = None
+from app.core.config.constants import *
+from app.core.config import *
 
 def init_models():
     """Start Postgres Connection"""
@@ -35,22 +22,24 @@ def init_models():
                                    min_detection_confidence = 0.8)
     # face_embedding_model = AdaFaceEmbedding(model_name = EMBEDDING_MODEL,
     #                                         HF_TOKEN = HF_KEY)
-    face_embedding_model = TimmEmbedding(device = "cpu")
+    face_embedding_model = TimmEmbedding(device = "cpu") # Change to cpu/cuda
     return mediapipe
 
 def init_qdrant_service() -> QdrantService:
     global qdrant_service
     qdrant_service = QdrantService(host = QDRANT_HOST,
+                                   port = QDRANT_PORT,
                                    embedding_dims = FACE_EMBEDDING_DIMS,
                                    distance = Distance.COSINE)
     return qdrant_service
 
-def init_minio_storage():
-    global registered_minio
-    registered_minio = MinioObjectStorage(endpoint = f"{MINIO_HOST}:9000",
-                                          bucket_name = MINIO_REGISTERED_BUCKET,
-                                          access_key = MINIO_ACCESS_KEY,
-                                          secret_key = MINIO_SECRET_KEY)
+def init_minio_storage() -> MinioObjectStorage:
+    global minio_storage
+    minio_storage = MinioObjectStorage(endpoint = f"{MINIO_HOST}:{MINIO_PORT}",
+                                       access_key = MINIO_ACCESS_KEY,
+                                       secret_key = MINIO_SECRET_KEY)
+    return minio_storage
+
 def get_face_embedding_model() ->BaseEmbedding:
     return face_embedding_model
 
@@ -60,7 +49,7 @@ def get_face_recognition_model() ->MediapipeDetection:
 def get_qdrant_service() -> QdrantService:
     return qdrant_service
 
-def get_registered_minio() -> MinioObjectStorage:
-    return registered_minio
+def get_minio_storage() -> MinioObjectStorage:
+    return minio_storage
 
 
