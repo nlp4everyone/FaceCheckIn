@@ -2,9 +2,6 @@
 from minio import Minio
 from minio.datatypes import Bucket
 # Other component
-from typing import List
-import numpy as np
-from .utils import convert_image_to_bytes
 from minio.error import S3Error
 from minio.helpers import ObjectWriteResult
 # Typing
@@ -14,65 +11,61 @@ import numpy as np
 from io import BytesIO
 import asyncio
 # Image
-from app.utils.image import ImagePreprocess
+from app.utils.image import ImagePreprocess, ImageProcessing
 
 class MinioObjectStorage:
     def __init__(self,
                  endpoint: str,
-                 bucket_name :str,
                  access_key: str | None = None,
                  secret_key: str | None = None,
                  **kwargs):
-        # Params
-        self._bucket_name = bucket_name
         # Init service
         self._minio_service = Minio(endpoint = endpoint,
                                     access_key = access_key,
                                     secret_key = secret_key,
                                     secure = False,
                                     **kwargs)
-        # Create bucket if not existed!
-        self.create_bucket()
 
     @property
     def list_buckets(self)-> List[Bucket]:
         return self._minio_service.list_buckets()
 
-    def create_bucket(self,**kwargs):
+    def file_exists(self,
+                    bucket_name: str,
+                    obj_name :str):
+        """Check whether object existed in bucket or not"""
+        try:
+            self._minio_service.stat_object(bucket_name,
+                                            obj_name)
+            return True
+        except S3Error as err:
+            return False
+
+    def create_bucket(self,
+                      bucket_name :str,
+                      **kwargs):
         # Create bucket while not existed
-        if not self._minio_service.bucket_exists(self._bucket_name):
-            self._minio_service.make_bucket(bucket_name = self._bucket_name,
+        if not self._minio_service.bucket_exists(bucket_name):
+            self._minio_service.make_bucket(bucket_name = bucket_name,
                                             **kwargs)
 
     def upload_image(self,
-                     image :np.ndarray,
-                     image_name :str,
-                     **kwargs):
-        """Upload the image to MinIO"""
-        # Convert image under numpy to bytes
-        image_bytes = convert_image_to_bytes(image)
-        # Upload to bucket
-        self._minio_service.put_object(bucket_name = self._bucket_name,
-                                       object_name = image_name,
-                                       data = image_bytes,
-                                       length = image_bytes.getbuffer().nbytes,
-                                       content_type = "image/png",
-                                       **kwargs)
-    def upload_image(self,
+                     bucket_name: str,
                      image :Union[np.ndarray,BytesIO],
                      image_name :str,
                      **kwargs) -> Union[ObjectWriteResult,None]:
         """Upload the image to MinIO"""
 
         # When file existed!
-        if self.file_exists(image_name):
+        if self.file_exists(bucket_name = bucket_name,
+                            obj_name = image_name):
             return None
         # Convert to bytes if image is numpy array
         if isinstance(image, np.ndarray):
             # Convert image under numpy to bytes
             image = ImagePreprocess.convert_image_to_bytes(image)
         # Upload to bucket
-        result = self._minio_service.put_object(bucket_name = self._bucket_name,
+        result = self._minio_service.put_object(bucket_name = bucket_name,
                                                 object_name = image_name,
                                                 data = image,
                                                 length = len(image.getvalue()) ,
@@ -81,32 +74,79 @@ class MinioObjectStorage:
         return result
 
     async def aupload_image(self,
+                            bucket_name: str,
                             image: Union[np.ndarray, BytesIO],
                             image_name: str,
                             **kwargs):
         """Asynchronous upload the image to MinIO"""
-        result = await asyncio.to_thread(self.upload_image,image,image_name,**kwargs)
+        result = await asyncio.to_thread(self.upload_image,
+                                         bucket_name,
+                                         image,
+                                         image_name,
+                                         **kwargs)
         return result
 
-    def file_exists(self,
-                    obj_name :str):
-        """Check whether object existed in bucket or not"""
-        try:
-            self._minio_service.stat_object(self._bucket_name, obj_name)
-            return True
-        except S3Error as err:
-            return False
+    def upload_video(self,
+                     bucket_name: str,
+                     images :List[np.ndarray],
+                     video_name :str,
+                     **kwargs) -> Union[ObjectWriteResult,None]:
+        """Upload the image to MinIO"""
 
-    def remove_image(self, image_name :str):
+        # When file existed!
+        if self.file_exists(bucket_name = bucket_name,
+                            obj_name = video_name):
+            return None
+
+        # Numpy image case
+        if not isinstance(images[0], np.ndarray):
+            raise ValueError(f"Image must be list of numpy array, not {type(images[0])}")
+
+        # Convert BGR image to RGB
+        rgb_images = ImagePreprocess.convert_bgr_to_rgb(images)
+        # Convert list of numpy to video buffer
+        video_buffer = ImageProcessing.images_to_video_buffer(rgb_images)
+
+        # Upload to bucket
+        result = self._minio_service.put_object(bucket_name = bucket_name,
+                                                object_name = video_name,
+                                                data = video_buffer,
+                                                content_type = "video/mp4",
+                                                length = video_buffer.getbuffer().nbytes,
+                                                **kwargs)
+        return result
+
+    async def aupload_video(self,
+                            bucket_name: str,
+                            images: List[np.ndarray],
+                            video_name: str,
+                            **kwargs):
+        """Asynchronous upload the video to MinIO"""
+        result = await asyncio.to_thread(self.upload_video,
+                                         bucket_name,
+                                         images,
+                                         video_name,
+                                         **kwargs)
+        return result
+
+    def remove_image(self,
+                     image_name :str,
+                     bucket_name :str):
         """Check image existed before removing"""
-        if self.file_exists(image_name):
+        if self.file_exists(bucket_name = bucket_name,
+                            obj_name = image_name):
             # Delete the object
             try:
-                self._minio_service.remove_object(self._bucket_name, image_name)
+                self._minio_service.remove_object(bucket_name,
+                                                  image_name)
             except S3Error as err:
                 print("Error occurred while deleting object:", err)
 
-    async def aremove_image(self, image_name :str):
+    async def aremove_image(self,
+                            image_name :str,
+                            bucket_name :str):
         """Asynchronous check image existed before removing"""
-        result = await asyncio.to_thread(self.remove_image, image_name)
+        result = await asyncio.to_thread(self.remove_image,
+                                         image_name,
+                                         bucket_name)
         return result
