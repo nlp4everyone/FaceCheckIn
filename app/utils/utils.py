@@ -43,6 +43,7 @@ def is_standard_image(frame :np.ndarray,
     :param accepted_threshold:
     :return:
     """
+    # *** Check again because IOU too low
     # Get the face information
     h, w = frame.shape[:2]
     # Centered point of image

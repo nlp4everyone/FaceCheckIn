@@ -2,6 +2,7 @@ import numpy as np
 import cv2, torch
 from torchvision import transforms
 from io import BytesIO
+from typing import List, Tuple
 
 class ImagePreprocess:
     @staticmethod
@@ -27,7 +28,7 @@ class ImagePreprocess:
 
     @staticmethod
     def resize_image_keep_aspect_ratio(image: np.ndarray,
-                                       fixed_width: int = 512):
+                                       fixed_width: int = 512) -> Tuple[np.ndarray,float]:
         # Check type
         if not isinstance(image, np.ndarray):
             raise ValueError("Image not found or cannot be opened.")
@@ -35,14 +36,16 @@ class ImagePreprocess:
         original_height, original_width = image.shape[:2]
         # Return if image width less than fixed width
         if original_width <= fixed_width:
-            return image
+            return image, 1
 
         # Calculate the new height to maintain the aspect ratio
         aspect_ratio = original_height / original_width
         new_height = int(fixed_width * aspect_ratio)
+        # Resized ratio
+        resize_ratio = new_height / original_height
 
         # Resize the image
-        return cv2.resize(image, (fixed_width, new_height), interpolation=cv2.INTER_AREA)
+        return cv2.resize(image, (fixed_width, new_height), interpolation=cv2.INTER_AREA), resize_ratio
 
     @staticmethod
     def compress_image(image :np.ndarray,
@@ -57,3 +60,7 @@ class ImagePreprocess:
 
         # Convert to BytesIO
         return BytesIO(encoded_image.tobytes())
+
+    @staticmethod
+    def convert_bgr_to_rgb(images :List[np.ndarray]):
+        return [cv2.cvtColor(image, cv2.COLOR_BGR2RGB) for image in images]

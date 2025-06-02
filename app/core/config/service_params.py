@@ -12,3 +12,4 @@ MINIO_PORT = os.getenv("MINIO_PORT")
 
 # Qdrant Params
 QDRANT_HOST = os.getenv("QDRANT_HOST")
+QDRANT_PORT = os.getenv("QDRANT_PORT")
