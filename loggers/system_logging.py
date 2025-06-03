@@ -47,6 +47,6 @@ class SystemLogger:
     def error(message: str,
               *args,
               **kwargs):
-        logger.opt(depth = depth).error(message,
-                                        *args,
-                                        **kwargs)
+        logger.opt(depth = depth, exception = True).error(message,
+                                                          *args,
+                                                          **kwargs)
