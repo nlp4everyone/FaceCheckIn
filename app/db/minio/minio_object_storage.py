@@ -8,8 +8,7 @@ from minio.helpers import ObjectWriteResult
 from typing import List, Union
 # Other component
 import numpy as np
-from io import BytesIO
-import asyncio
+import io
 # Image
 from app.utils.image import ImagePreprocess, ImageProcessing
 
@@ -51,7 +50,7 @@ class MinioObjectStorage:
 
     def upload_image(self,
                      bucket_name: str,
-                     image :Union[np.ndarray,BytesIO],
+                     image :Union[np.ndarray,io.BytesIO],
                      image_name :str,
                      **kwargs) -> Union[ObjectWriteResult,None]:
         """Upload the image to MinIO"""
@@ -73,19 +72,6 @@ class MinioObjectStorage:
                                                 **kwargs)
         return result
 
-    async def aupload_image(self,
-                            bucket_name: str,
-                            image: Union[np.ndarray, BytesIO],
-                            image_name: str,
-                            **kwargs):
-        """Asynchronous upload the image to MinIO"""
-        result = await asyncio.to_thread(self.upload_image,
-                                         bucket_name,
-                                         image,
-                                         image_name,
-                                         **kwargs)
-        return result
-
     def upload_video(self,
                      bucket_name: str,
                      images :List[np.ndarray],
@@ -105,28 +91,23 @@ class MinioObjectStorage:
         # Convert BGR image to RGB
         rgb_images = ImagePreprocess.convert_bgr_to_rgb(images)
         # Convert list of numpy to video buffer
-        video_buffer = ImageProcessing.images_to_video_buffer(rgb_images)
+        ImageProcessing.write_images_to_video(rgb_images,
+                                              output_path = "temp.mp4",
+                                              backends = "ffmpeg")
+
+        # Read video as buffer
+        with open("temp.mp4", 'rb') as f:
+            buffer = f.read()
+
+        byte_stream = io.BytesIO(buffer)
 
         # Upload to bucket
         result = self._minio_service.put_object(bucket_name = bucket_name,
                                                 object_name = video_name,
-                                                data = video_buffer,
+                                                data = byte_stream,
                                                 content_type = "video/mp4",
-                                                length = video_buffer.getbuffer().nbytes,
+                                                length = byte_stream.getbuffer().nbytes,
                                                 **kwargs)
-        return result
-
-    async def aupload_video(self,
-                            bucket_name: str,
-                            images: List[np.ndarray],
-                            video_name: str,
-                            **kwargs):
-        """Asynchronous upload the video to MinIO"""
-        result = await asyncio.to_thread(self.upload_video,
-                                         bucket_name,
-                                         images,
-                                         video_name,
-                                         **kwargs)
         return result
 
     def remove_image(self,
@@ -141,12 +122,3 @@ class MinioObjectStorage:
                                                   image_name)
             except S3Error as err:
                 print("Error occurred while deleting object:", err)
-
-    async def aremove_image(self,
-                            image_name :str,
-                            bucket_name :str):
-        """Asynchronous check image existed before removing"""
-        result = await asyncio.to_thread(self.remove_image,
-                                         image_name,
-                                         bucket_name)
-        return result
