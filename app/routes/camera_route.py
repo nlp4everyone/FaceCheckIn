@@ -1,6 +1,6 @@
 # FastAPI Components
 import numpy as np
-from fastapi import APIRouter, WebSocket, Request
+from fastapi import APIRouter, WebSocket, Request, WebSocketDisconnect
 from fastapi.templating import Jinja2Templates
 # Camera Feeder
 from app.utils.camera import CameraFeeder
@@ -38,8 +38,6 @@ if not os.path.exists(camera_path):
 
 # Define router
 camera_route = APIRouter()
-# Camera Feeder
-camera_feeder = CameraFeeder(camera_index = CAMERA_INDEX)
 # Template
 templates = Jinja2Templates(directory = "app/templates")
 # Timer
@@ -65,6 +63,8 @@ async def send_delayed_notification(msg :dict,
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
+    # Camera Feeder
+    camera_feeder = CameraFeeder(camera_index = CAMERA_INDEX)
     # Init models
     mediapipe = get_face_recognition_model()
     embedding_model = get_face_embedding_model()
@@ -86,12 +86,14 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             # Read from camera
-            frame_bytes, frame_numpy = camera_feeder.generate_frames(format = ".jpg",
-                                                                     quality = CAMERA_QUALITY)
+            frame_bytes, frame_numpy = await asyncio.to_thread(camera_feeder.generate_frames,
+                                                               format = ".jpg",
+                                                               quality = CAMERA_QUALITY)
 
             # Resized to fixed size image (Reducing time for processing)
-            frame_numpy, resized_ratio = ImagePreprocess.resize_image_keep_aspect_ratio(frame_numpy,
-                                                                                        fixed_width = DOWNSCALE_IMAGE_WIDTH)
+            frame_numpy, resized_ratio = await asyncio.to_thread(ImagePreprocess.resize_image_keep_aspect_ratio,
+                                                                 frame_numpy,
+                                                                 fixed_width = DOWNSCALE_IMAGE_WIDTH)
             # Accumulate frames
             total_frames +=1
             if collecting: frames.append(frame_numpy)
@@ -101,24 +103,30 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Skip if in cooldown
             in_spam_cooldown = last_alert_time is not None and (current_time - last_alert_time) < SPAM_COOLDOWN_SECONDS
+
             # Send frame to websocket
             if frame_bytes:
-                await websocket.send_bytes(frame_bytes)
-            await asyncio.sleep(0.01)  # ~30 FPS
+                try:
+                    await websocket.send_bytes(frame_bytes)
+                except Exception as e:
+                    SystemLogger.warning(f"Failed to send frame to WebSocket: {e}")
+                    break  # likely closed by client
 
             try:
                 # Add Fixed Frame Skipping for better speed and offload CPU
                 if total_frames % FRAME_SKIPPING_ITERATION == 0:
                     # Handle face detection
-                    detections = mediapipe.detect_faces(frame_numpy)
+                    detections = await asyncio.to_thread(mediapipe.detect_faces, frame_numpy, limit = 1)
 
 
                     # Specify whether image choosen or not
-                    standarded_image = is_standard_image(frame_numpy,
-                                                         face_bbox = tuple(detections[0].box),
-                                                         rect_width = int(RECT_WIDTH * resized_ratio),
-                                                         rect_height = int(RECT_HEIGHT * resized_ratio),
-                                                         accepted_threshold = IOU_ACCEPTED_THRESHOLD)
+                    standarded_image = await asyncio.to_thread(is_standard_image,
+                                                               frame_numpy,
+                                                               tuple(detections[0].box),
+                                                               int(RECT_WIDTH * resized_ratio),
+                                                               int(RECT_HEIGHT * resized_ratio),
+                                                               IOU_ACCEPTED_THRESHOLD)
+
                     # When detection existed and archive desired IOU
                     if detections and standarded_image:
                         # By pass
@@ -177,28 +185,37 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Process collected detections
                 SystemLogger.success(f"Collected {total_detected_frames} detections in {int(FACE_WAIT_TIME)} second")
                 # Select most frontal face image from input
-                selected_frames, detection_results = FrontalFaceFiltering.select_frames(frames = face_frames,
-                                                                                        detections = collected_detections)
+                selected_frames, detection_results = await asyncio.to_thread(FrontalFaceFiltering.select_frames,
+                                                                             frames = face_frames,
+                                                                             detections = collected_detections,
+                                                                             top_k = 1)
                 # Mark time
                 timer.mark("Sorting frame duration")
 
                 # Keypoint
                 keypoint = detection_results[0][1].model_dump().get("keypoint")
                 # Aligned image
-                aligned_image = BasicAlignment.align_face_5points(image = selected_frames[0],
-                                                                  landmarks = keypoint)
+                aligned_image = await asyncio.to_thread(BasicAlignment.align_face_5points,
+                                                        image = selected_frames[0],
+                                                        landmarks = keypoint,
+                                                        output_size = (112,112))
                 # Mark
                 timer.mark("Alignment duration")
 
                 # Embedding
-                face_embedding = embedding_model.embed(aligned_image)
+                face_embedding = await asyncio.to_thread(embedding_model.embed,
+                                                         aligned_image)
                 # Mark
                 timer.mark("Embedding duration")
 
                 # When last face is not empty, compare
                 if last_face_embedding is not None:
                     # Get similiar score
-                    similarity_score = calculate_similarity(face_embedding, last_face_embedding).float()
+                    # similarity_score = calculate_similarity(face_embedding, last_face_embedding).float()
+                    similarity_score = await asyncio.to_thread(calculate_similarity,
+                                                               face_embedding,
+                                                               last_face_embedding,
+                                                               metrics = "cosine")
                     # Prevent repeated spamming
                     if last_face_embedding is not None and similarity_score >= FACE_SIMILARITY_THRESHOLD:
                         # Define last alert time
@@ -230,15 +247,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Define timestamp
                 file_name = datetime.now().strftime("%Y/%m/%d/%Y-%m-%d_%H:%M:%S")
 
-                # Saved data in background
-                await minio_storage.aupload_image(bucket_name = MINIO_CHECKIN_BUCKET,
-                                                  image = aligned_image,
-                                                  image_name = f"{file_name}_{identfication}.png")
+                # Upload main image in background
+                asyncio.create_task(asyncio.to_thread(minio_storage.upload_image,
+                                                      bucket_name = MINIO_CHECKIN_BUCKET,
+                                                      image = aligned_image.copy(),
+                                                      image_name = f"{file_name}_{identfication}.png"))
 
-                # Saved data in background
-                await minio_storage.aupload_video(bucket_name = MINIO_CHECKIN_BUCKET,
-                                                  images = frames,
-                                                  video_name = f"{file_name}_{identfication}.mp4")
+                # Upload video in background
+                asyncio.create_task(asyncio.to_thread(minio_storage.upload_video,
+                                                      bucket_name = MINIO_CHECKIN_BUCKET,
+                                                      images = frames.copy(),
+                                                      video_name = f"{file_name}_{identfication}.mp4"))
+
                 # Last detected time
                 last_detected_time = asyncio.get_event_loop().time()
                 # Set value to last embedding
@@ -248,8 +268,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 face_frames.clear()
                 frames.clear()
 
+
+    except WebSocketDisconnect:
+        SystemLogger.info("WebSocket disconnected by client.")
     except Exception as e:
-        SystemLogger.error(e)
+        SystemLogger.error(f"Unexpected error: {e}")
     finally:
+        SystemLogger.info("Releasing camera feeder.")
         camera_feeder.release()
 

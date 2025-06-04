@@ -19,6 +19,7 @@ from app.core.exceptions import (UserNotFoundException,
                                  UserExistedException,
                                  FaceNotFoundException)
 from app.core.config.constants import *
+import asyncio
 
 # ekyc router
 face_management_router = APIRouter()
@@ -92,10 +93,12 @@ async def face_register(face_id :str = Form(...),
                                                           quality = COMPRESS_IMAGE_RATIO)
 
         # *** Change file name ***
-        # Upload image
-        result = await minio_storage.aupload_image(bucket_name = MINIO_REGISTERED_BUCKET,
-                                                   image = compressed_image,
-                                                   image_name = file.filename)
+        # Upload main image in background
+        asyncio.create_task(asyncio.to_thread(minio_storage.upload_image,
+                                              bucket_name = MINIO_REGISTERED_BUCKET,
+                                              image = compressed_image,
+                                              image_name = file.filename))
+
         # Return
         return inserted_result
     except UserExistedException as e:
@@ -118,8 +121,9 @@ async def face_delete(face_id :str):
         SystemLogger.success(f"Remove face {face_id} from Qdrant")
 
         # Remove object from Minio (If existed)
-        await minio_storage.aremove_image(image_name = response.data.get("image_name"),
-                                          bucket_name = MINIO_REGISTERED_BUCKET)
+        asyncio.create_task(asyncio.to_thread(minio_storage.remove_image,
+                                              bucket_name = MINIO_REGISTERED_BUCKET,
+                                              image_name = response.data.get("image_name")))
         # Logging
         SystemLogger.success(f"Remove face {face_id} from Minio")
         # Return
