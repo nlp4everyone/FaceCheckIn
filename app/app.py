@@ -26,7 +26,8 @@ tags_metadata = [
 
 app = FastAPI()
 # Append route
-app.include_router(camera_route)
+app.include_router(camera_route,
+                   prefix = "/camera")
 app.include_router(preview_router,
                    prefix = "/development",
                    tags = [tags_metadata[0].get("name")])
