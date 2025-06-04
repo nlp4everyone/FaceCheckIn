@@ -1,4 +1,4 @@
-from typing import Tuple, Literal
+from typing import Tuple, Literal, Union
 from io import BytesIO
 import numpy as np
 import imageio, cv2, subprocess
@@ -39,8 +39,9 @@ class ImageProcessing:
                               backends :Literal["opencv","ffmpeg"] = "opencv",
                               fps :int = 30,
                               crf :int = 23,
-                              preset = "medium",
-                              codec = 'mp4v'):
+                              preset :Union[Literal["ultrafast","superfast","medium","slow"],str]= "medium",
+                              codec = 'mp4v',
+                              enable_logging :bool = False):
         """
         Convert a list of image arrays to a video file using OpenCV.
 
@@ -91,7 +92,13 @@ class ImageProcessing:
                 output_path
             ]
             # Init Popen
-            process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+            process = subprocess.Popen(cmd,
+                                       stdin = subprocess.PIPE,
+                                       stdout = subprocess.DEVNULL if not enable_logging else None,
+                                       stderr = subprocess.DEVNULL if not enable_logging else None)
+            # stdout=subprocess.DEVNULL → hides normal output.
+            # stderr=subprocess.DEVNULL → hides warnings/errors/logs (what FFmpeg normally prints).
+
             # Write
             for img in images: process.stdin.write(img.astype(np.uint8).tobytes())
 
