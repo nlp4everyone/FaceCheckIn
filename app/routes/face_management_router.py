@@ -92,12 +92,11 @@ async def face_register(face_id :str = Form(...),
         compressed_image = ImagePreprocess.compress_image(image_numpy,
                                                           quality = COMPRESS_IMAGE_RATIO)
 
-        # *** Change file name ***
         # Upload main image in background
         asyncio.create_task(asyncio.to_thread(minio_storage.upload_image,
                                               bucket_name = MINIO_REGISTERED_BUCKET,
                                               image = compressed_image,
-                                              image_name = file.filename))
+                                              image_name = f"{face_id}_{face_name}.png"))
 
         # Return
         return inserted_result
