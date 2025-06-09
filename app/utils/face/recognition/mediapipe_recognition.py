@@ -1,5 +1,5 @@
 # Typing
-from typing import Union, List
+from typing import Union, List, Literal
 # Base Recognition
 from .base_recognition import BaseRecognition, FaceDetection, FacialKeyPoints
 # Other component
@@ -22,15 +22,44 @@ KEY_LANDMARKS = {
 
 class MediapipeDetection(BaseRecognition):
     def __init__(self,
-                 model_selection :int = 1,
-                 min_detection_confidence: float = 0.5):
+                 min_detection_confidence: float = 0.5,
+                 min_tracking_confidence: float = 0.5,
+                 max_num_faces :int = 3):
         super().__init__()
-        self._face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False,
-                                                max_num_faces=1)
+        self._face_mesh = mp_face_mesh.FaceMesh(static_image_mode = False,
+                                                min_detection_confidence = min_detection_confidence,
+                                                min_tracking_confidence = min_tracking_confidence,
+                                                max_num_faces = max_num_faces)
+
+    @staticmethod
+    def _get_central_face(image :np.ndarray,
+                          prediction :list):
+        img_h, img_w, _ = image.shape
+        target_point = int(img_w/2), int(img_h/2)
+
+        # Store the closest face info
+        min_distance = float('inf')
+        closest_face_landmarks = None
+
+        for face_landmarks in prediction.multi_face_landmarks:
+            # Compute the mean x, y of all landmarks in the face
+            xs = [lm.x * img_w for lm in face_landmarks.landmark]
+            ys = [lm.y * img_h for lm in face_landmarks.landmark]
+            face_center_x = np.mean(xs)
+            face_center_y = np.mean(ys)
+
+            distance = np.sqrt((face_center_x - target_point[0]) ** 2 + (face_center_y - target_point[1]) ** 2)
+
+            if distance < min_distance:
+                min_distance = distance
+                closest_face_landmarks = face_landmarks
+
+        return closest_face_landmarks
 
     def detect_faces(self,
                      image: Union[str, np.ndarray],
-                     limit: int = 1) -> List[FaceDetection]:
+                     limit: int = 1,
+                     mode :Literal["central","biggest"] = "central") -> List[FaceDetection]:
         """Predict the face keypoint from input image"""
         # Get the face information
         h, w = image.shape[:2]
@@ -42,8 +71,8 @@ class MediapipeDetection(BaseRecognition):
         # When no face detection
         if not prediction.multi_face_landmarks:
             return None
-        # Get the first face *** Should select largest ***
-        face_landmarks = prediction.multi_face_landmarks[0]  # Currently select the largest one
+        # Get face with most central position compare to the image
+        face_landmarks = self._get_central_face(image = image, prediction = prediction) if mode == 'central' else None  # Currently select the largest one
         # Get landmark
         landmarks = [(lm.x, lm.y, lm.z) for lm in face_landmarks.landmark]
 

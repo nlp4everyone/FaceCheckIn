@@ -18,8 +18,7 @@ def init_models():
     # # Init connection
     # mtcnn = MTCNNRecognition(device = "cpu",
     #                          post_process = False)
-    mediapipe = MediapipeDetection(model_selection = 0,
-                                   min_detection_confidence = 0.8)
+    mediapipe = MediapipeDetection(min_detection_confidence = 0.7)
     # face_embedding_model = AdaFaceEmbedding(model_name = EMBEDDING_MODEL,
     #                                         HF_TOKEN = HF_KEY)
     face_embedding_model = TimmEmbedding(device = "cpu") # Change to cpu/cuda

@@ -20,3 +20,4 @@ app/db/qdrant/__pycache__/
 app/routes/__pycache__/
 loggers/__pycache__/
 app/startup/__pycache__/
+app/utils/face/embedding/ada_face.py
