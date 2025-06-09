@@ -118,7 +118,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Handle face detection
                     detections = await asyncio.to_thread(mediapipe.detect_faces, frame_numpy, limit = 1)
 
-
                     # Specify whether image choosen or not
                     standarded_image = await asyncio.to_thread(is_standard_image,
                                                                frame_numpy,
@@ -233,16 +232,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 for report in reports: SystemLogger.info(report)
 
                 identfication = "Undefined"
+
                 # When found face
                 if face_retrieved:
                     user_info = face_retrieved[0].payload
                     # Get face name
                     identfication = user_info.get("face_name")
+                    score = face_retrieved[0].score
+
                     # Send text back to screen
                     await websocket.send_text(json.dumps(FACE_SINGED_MSG(identfication)))
+                    # Logging
+                    SystemLogger.success(f"Check in done with user: {identfication} and similarity score: {round(score,2)}")
                 else:
                     # Opposite
                     await websocket.send_text(json.dumps(FACE_NOT_FOUND_MSG))
+                    # Logging
+                    SystemLogger.warning(f"Cannot retrieved face from database")
 
                 # Define timestamp
                 file_name = datetime.now().strftime("%Y/%m/%d/%Y-%m-%d_%H:%M:%S")
